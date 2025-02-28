@@ -179,8 +179,8 @@ export const generateRecipe = async (params: RecipeParams): Promise<Recipe> => {
       recipe.imageUrl = imageUrl;
     } catch (error) {
       console.error("Error generating recipe image:", error);
-      // Set a default image if generation fails
-      recipe.imageUrl = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1024";
+      // Set a more reliable default image if generation fails
+      recipe.imageUrl = selectFallbackImage(recipe.title);
     }
 
     return recipe;
@@ -188,6 +188,39 @@ export const generateRecipe = async (params: RecipeParams): Promise<Recipe> => {
     console.error("Error generating recipe:", error);
     throw error;
   }
+};
+
+// Function to select a fallback image based on recipe type
+const selectFallbackImage = (title: string): string => {
+  // Convert title to lowercase for easier matching
+  const lowerTitle = title.toLowerCase();
+  
+  // Define image categories and their corresponding fallback images
+  const fallbackImages = {
+    breakfast: "https://images.unsplash.com/photo-1533089860892-a9c9af5de2b1?w=800&auto=format&fit=crop",
+    lunch: "https://images.unsplash.com/photo-1547496502-affa22d38842?w=800&auto=format&fit=crop",
+    dinner: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=800&auto=format&fit=crop",
+    dessert: "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=800&auto=format&fit=crop",
+    salad: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&auto=format&fit=crop",
+    soup: "https://images.unsplash.com/photo-1547592180-85f173990554?w=800&auto=format&fit=crop",
+    pasta: "https://images.unsplash.com/photo-1563379926898-05f4575a45d8?w=800&auto=format&fit=crop",
+    meat: "https://images.unsplash.com/photo-1558030006-450675393462?w=800&auto=format&fit=crop",
+    fish: "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&auto=format&fit=crop",
+    vegetables: "https://images.unsplash.com/photo-1478004521390-655bd10c9f43?w=800&auto=format&fit=crop",
+    chicken: "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=800&auto=format&fit=crop",
+    beef: "https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=800&auto=format&fit=crop",
+    default: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop",
+  };
+  
+  // Check if title contains any of the categories
+  for (const [category, url] of Object.entries(fallbackImages)) {
+    if (lowerTitle.includes(category)) {
+      return url;
+    }
+  }
+  
+  // If no match, return the default image
+  return fallbackImages.default;
 };
 
 export default {

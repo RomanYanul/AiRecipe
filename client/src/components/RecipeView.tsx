@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -17,6 +17,8 @@ import {
   CircularProgress,
   Card,
   CardContent,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
@@ -26,8 +28,191 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { saveRecipe, reset } from '../features/recipes/recipeSlice';
+import { Recipe } from '../services/openai';
+
+// Memoized recipe section components
+const RecipeHeader = React.memo(({ recipe }: { recipe: Recipe }) => {
+  return (
+    <Box sx={{ mb: 4 }}>
+      <Typography variant="h4" fontWeight="bold" color="primary.dark" gutterBottom>
+        {recipe.title}
+      </Typography>
+      <Typography variant="body1" color="text.secondary" paragraph>
+        {recipe.description}
+      </Typography>
+    </Box>
+  );
+});
+
+const RecipeImageSection = React.memo(({ imageUrl, title }: { imageUrl?: string, title: string }) => {
+  const [imageError, setImageError] = useState(false);
+  
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+  }, []);
+  
+  if (!imageUrl || imageError) {
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          height: '300px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(0, 0, 0, 0.03)',
+          borderRadius: 2,
+          mb: 4,
+        }}
+      >
+        <RestaurantIcon sx={{ fontSize: 80, color: 'primary.light', opacity: 0.7 }} />
+      </Box>
+    );
+  }
+  
+  return (
+    <Box
+      component="img"
+      src={imageUrl}
+      alt={title}
+      onError={handleImageError}
+      sx={{
+        width: '100%',
+        height: 'auto',
+        maxHeight: '400px',
+        objectFit: 'cover',
+        borderRadius: 2,
+        mb: 4,
+        backgroundColor: 'rgba(0, 0, 0, 0.03)',
+      }}
+    />
+  );
+});
+
+const RecipeInfoChips = React.memo(({ recipe }: { recipe: Recipe }) => {
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 4 }}>
+      <Chip 
+        icon={<AccessTimeIcon />} 
+        label={`Prep: ${recipe.prepTime} min`} 
+        color="primary" 
+        variant="outlined" 
+      />
+      <Chip 
+        icon={<AccessTimeIcon />} 
+        label={`Cook: ${recipe.cookTime} min`} 
+        color="primary" 
+        variant="outlined" 
+      />
+      <Chip 
+        icon={<RestaurantIcon />} 
+        label={`Servings: ${recipe.servings}`} 
+        color="primary" 
+        variant="outlined" 
+      />
+      <Chip 
+        icon={<LocalDiningIcon />} 
+        label={`Calories: ${recipe.nutrition.calories} kcal`} 
+        color="primary" 
+        variant="outlined" 
+      />
+    </Box>
+  );
+});
+
+const RecipeIngredients = React.memo(({ ingredients }: { ingredients: string[] }) => {
+  return (
+    <Paper elevation={1} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
+      <Typography variant="h6" fontWeight="bold" gutterBottom>
+        Ingredients
+      </Typography>
+      <Divider sx={{ mb: 2 }} />
+      <List sx={{ pt: 0 }}>
+        {ingredients.map((ingredient, index) => (
+          <ListItem key={`ingredient-${index}`} sx={{ py: 0.5 }}>
+            <ListItemIcon sx={{ minWidth: 36 }}>
+              <CheckCircleOutlineIcon color="primary" fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary={ingredient} />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
+});
+
+const RecipeInstructions = React.memo(({ instructions }: { instructions: string[] }) => {
+  return (
+    <Paper elevation={1} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
+      <Typography variant="h6" fontWeight="bold" gutterBottom>
+        Instructions
+      </Typography>
+      <Divider sx={{ mb: 2 }} />
+      <List sx={{ pt: 0 }}>
+        {instructions.map((step, index) => (
+          <ListItem key={`step-${index}`} alignItems="flex-start" sx={{ py: 1 }}>
+            <ListItemIcon sx={{ minWidth: 36 }}>
+              <Box
+                sx={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 'bold',
+                  fontSize: 14,
+                }}
+              >
+                {index + 1}
+              </Box>
+            </ListItemIcon>
+            <ListItemText primary={step} sx={{ m: 0 }} />
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
+  );
+});
+
+const RecipeNutrition = React.memo(({ nutrition }: { nutrition: Recipe['nutrition'] }) => {
+  const nutritionItems = useMemo(() => [
+    { label: 'Calories', value: nutrition.calories },
+    { label: 'Protein', value: nutrition.protein },
+    { label: 'Carbs', value: nutrition.carbohydrates || '0g' },
+    { label: 'Fat', value: nutrition.fat },
+    { label: 'Fiber', value: nutrition.fiber },
+  ], [nutrition]);
+
+  return (
+    <Paper elevation={1} sx={{ p: 3, borderRadius: 2 }}>
+      <Typography variant="h6" fontWeight="bold" gutterBottom>
+        Nutrition Information
+      </Typography>
+      <Divider sx={{ mb: 2 }} />
+      <Grid container spacing={2}>
+        {nutritionItems.map((item) => (
+          <Grid item xs={6} sm={4} md={2} key={item.label}>
+            <Box textAlign="center">
+              <Typography variant="body2" color="text.secondary">
+                {item.label}
+              </Typography>
+              <Typography variant="body1" fontWeight="bold">
+                {item.value}
+              </Typography>
+            </Box>
+          </Grid>
+        ))}
+      </Grid>
+    </Paper>
+  );
+});
 
 const RecipeView: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   
@@ -39,45 +224,49 @@ const RecipeView: React.FC = () => {
   // Check if the current recipe is already saved
   const [isAlreadySaved, setIsAlreadySaved] = useState(false);
   
+  // Memoize the check for already saved recipe
+  const checkIfRecipeIsSaved = useCallback((recipe: Recipe | null, recipesList: Recipe[]) => {
+    if (!recipe || recipesList.length === 0) return false;
+    
+    return recipesList.some(
+      r => r.title === recipe.title && r.description === recipe.description
+    );
+  }, []);
+  
   useEffect(() => {
     // If not logged in, redirect to login
     if (!user) {
       navigate('/login');
+      return;
     }
 
     // If no current recipe, redirect to generate
     if (!currentRecipe) {
       navigate('/generate');
+      return;
     }
     
     // Check if the recipe is already saved
-    if (currentRecipe && recipes.length > 0) {
-      const recipeExists = recipes.some(
-        recipe => recipe.title === currentRecipe.title && 
-                 recipe.description === currentRecipe.description
-      );
-      setIsAlreadySaved(recipeExists);
-    }
+    setIsAlreadySaved(checkIfRecipeIsSaved(currentRecipe, recipes));
 
     return () => {
       dispatch(reset());
     };
-  }, [user, currentRecipe, recipes, navigate, dispatch]);
+  }, [user, currentRecipe, recipes, navigate, dispatch, checkIfRecipeIsSaved]);
 
-  const handleSaveRecipe = () => {
-    if (currentRecipe) {
+  const handleSaveRecipe = useCallback(() => {
+    if (currentRecipe && !isAlreadySaved) {
       // Create a copy of the recipe to save, keeping the ID
       const recipeToSave = { ...currentRecipe };
-      
-      // Save the recipe with its existing ID
       dispatch(saveRecipe(recipeToSave));
     }
-  };
+  }, [currentRecipe, isAlreadySaved, dispatch]);
 
-  const handleBackToGenerate = () => {
+  const handleBackToGenerate = useCallback(() => {
     navigate('/generate');
-  };
+  }, [navigate]);
 
+  // Loading state
   if (!currentRecipe) {
     return (
       <Container maxWidth="md" sx={{ py: 4, textAlign: 'center' }}>
@@ -100,13 +289,24 @@ const RecipeView: React.FC = () => {
         </Alert>
       )}
 
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={handleBackToGenerate}
-        sx={{ mb: 2 }}
-      >
-        Back to Generator
-      </Button>
+      <Box mb={4}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={handleBackToGenerate}
+          sx={{ mb: 2 }}
+        >
+          Back to Generator
+        </Button>
+      </Box>
+
+      {/* Recipe Image */}
+      <RecipeImageSection imageUrl={currentRecipe.imageUrl} title={currentRecipe.title} />
+
+      {/* Recipe Header */}
+      <RecipeHeader recipe={currentRecipe} />
+
+      {/* Recipe Info */}
+      <RecipeInfoChips recipe={currentRecipe} />
 
       <Paper
         elevation={3}
@@ -116,91 +316,6 @@ const RecipeView: React.FC = () => {
           mb: 4,
         }}
       >
-        <Typography variant="h4" fontWeight="bold" gutterBottom color="primary.dark">
-          {currentRecipe.title}
-        </Typography>
-        
-        {currentRecipe.imageUrl && (
-          <Box sx={{ mb: 3, mt: 2, display: 'flex', justifyContent: 'center' }}>
-            <Box
-              component="img"
-              src={currentRecipe.imageUrl}
-              alt={currentRecipe.title}
-              sx={{
-                width: '100%',
-                maxWidth: '600px',
-                height: 'auto',
-                borderRadius: 2,
-                boxShadow: 3,
-              }}
-            />
-          </Box>
-        )}
-        
-        <Typography variant="body1" paragraph>
-          {currentRecipe.description}
-        </Typography>
-
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={6} sm={3}>
-            <Card elevation={0} sx={{ backgroundColor: 'primary.light', color: 'white', height: '100%' }}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <AccessTimeIcon />
-                <Typography variant="body2" fontWeight="bold">
-                  Prep Time
-                </Typography>
-                <Typography variant="body1">
-                  {currentRecipe.prepTime} min
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={6} sm={3}>
-            <Card elevation={0} sx={{ backgroundColor: 'primary.main', color: 'white', height: '100%' }}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <AccessTimeIcon />
-                <Typography variant="body2" fontWeight="bold">
-                  Cook Time
-                </Typography>
-                <Typography variant="body1">
-                  {currentRecipe.cookTime} min
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={6} sm={3}>
-            <Card elevation={0} sx={{ backgroundColor: 'primary.dark', color: 'white', height: '100%' }}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <RestaurantIcon />
-                <Typography variant="body2" fontWeight="bold">
-                  Servings
-                </Typography>
-                <Typography variant="body1">
-                  {currentRecipe.servings}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={6} sm={3}>
-            <Card elevation={0} sx={{ backgroundColor: 'secondary.main', color: 'white', height: '100%' }}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <LocalDiningIcon />
-                <Typography variant="body2" fontWeight="bold">
-                  Calories
-                </Typography>
-                <Typography variant="body1">
-                  {currentRecipe.nutrition.calories} kcal
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        <Divider sx={{ my: 3 }} />
-
         <Typography variant="h5" fontWeight="bold" gutterBottom color="primary.dark">
           Nutrition Information
         </Typography>
@@ -312,4 +427,4 @@ const RecipeView: React.FC = () => {
   );
 };
 
-export default RecipeView; 
+export default React.memo(RecipeView); 

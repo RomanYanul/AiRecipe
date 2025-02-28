@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -32,11 +32,13 @@ import LinkedInIcon from '@mui/icons-material/LinkedIn';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import { useAppSelector, useAppDispatch } from '../app/hooks';
 import { logout } from '../features/auth/authSlice';
-import { getRecipes, setCurrentRecipe, deleteRecipe } from '../features/recipes/recipeSlice';
+import { getRecipes, setCurrentRecipe, deleteRecipe, clearCurrentRecipe } from '../features/recipes/recipeSlice';
 import { Recipe } from '../services/openai';
-import DeleteRecipeModal from './DeleteRecipeModal';
 
-// Array of key features for the app
+// Lazy load the DeleteRecipeModal to improve initial load time
+const DeleteRecipeModal = lazy(() => import('./DeleteRecipeModal'));
+
+// Memoized key features to prevent unnecessary re-renders
 const keyFeatures = [
   {
     icon: <SmartToyIcon sx={{ fontSize: 48 }} />,
@@ -60,8 +62,181 @@ const keyFeatures = [
   }
 ];
 
-// Footer component
-const Footer = () => {
+// Memoized KeyFeatureCard component to prevent re-rendering when parent changes
+const KeyFeatureCard = React.memo(({ feature, elevation = 2, hoverTransform = -5 }: { 
+  feature: typeof keyFeatures[0], 
+  elevation?: number,
+  hoverTransform?: number
+}) => (
+  <Paper
+    elevation={elevation}
+    sx={{
+      p: 3,
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      textAlign: 'center',
+      borderRadius: elevation > 2 ? 4 : 2,
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      '&:hover': {
+        transform: `translateY(${hoverTransform}px)`,
+        boxShadow: elevation + 1,
+      }
+    }}
+  >
+    <Box sx={{ color: 'primary.main', mb: 2 }}>
+      {feature.icon}
+    </Box>
+    <Typography variant="h6" fontWeight="bold" gutterBottom>
+      {feature.title}
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      {feature.description}
+    </Typography>
+  </Paper>
+));
+
+// Optimized RecipeCard component
+const RecipeCard = React.memo(({ 
+  recipe, 
+  onView, 
+  onDelete 
+}: { 
+  recipe: Recipe, 
+  onView: (recipe: Recipe) => void, 
+  onDelete: (recipe: Recipe) => void 
+}) => {
+  // State to track image loading errors
+  const [imageError, setImageError] = useState(false);
+  
+  // Handle image loading errors
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+  }, []);
+
+  return (
+    <Card 
+      elevation={2}
+      sx={{ 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: 6,
+        },
+      }}
+    >
+      {recipe.imageUrl && !imageError ? (
+        <Box
+          component="img"
+          src={recipe.imageUrl}
+          alt={recipe.title}
+          onError={handleImageError}
+          sx={{
+            width: '100%',
+            height: '160px',
+            objectFit: 'cover',
+            backgroundColor: 'rgba(0, 0, 0, 0.03)',
+          }}
+        />
+      ) : (
+        <Box
+          sx={{
+            width: '100%',
+            height: '160px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.03)',
+          }}
+        >
+          <RestaurantIcon sx={{ fontSize: 60, color: 'primary.light', opacity: 0.7 }} />
+        </Box>
+      )}
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.dark" noWrap>
+          {recipe.title}
+        </Typography>
+        
+        <Typography 
+          variant="body2" 
+          color="text.secondary" 
+          sx={{ 
+            mb: 2,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            height: '40px'
+          }}
+        >
+          {recipe.description}
+        </Typography>
+        
+        <Divider sx={{ my: 1.5 }} />
+        
+        <Grid container spacing={1}>
+          <Grid item xs={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
+              <AccessTimeIcon color="primary" fontSize="small" />
+              <Typography variant="caption" align="center">
+                {Number(recipe.prepTime) + Number(recipe.cookTime)} min
+              </Typography>
+            </Box>
+          </Grid>
+          
+          <Grid item xs={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
+              <RestaurantIcon color="primary" fontSize="small" />
+              <Typography variant="caption" align="center">
+                {recipe.servings} serv
+              </Typography>
+            </Box>
+          </Grid>
+          
+          <Grid item xs={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
+              <LocalDiningIcon color="primary" fontSize="small" />
+              <Typography variant="caption" align="center">
+                {recipe.nutrition.calories} kcal
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
+      </CardContent>
+      
+      <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
+        <Button 
+          size="small" 
+          variant="outlined"
+          onClick={() => onView(recipe)}
+        >
+          View Recipe
+        </Button>
+        
+        <Tooltip title="Delete Recipe">
+          <IconButton 
+            size="small"
+            color="error"
+            onClick={() => onDelete(recipe)}
+            disabled={!(recipe.id || recipe._id)}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </CardActions>
+    </Card>
+  );
+});
+
+// Memoized Footer component
+const Footer = React.memo(() => {
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  
   return (
     <Box
       component="footer"
@@ -126,12 +301,12 @@ const Footer = () => {
         <Divider sx={{ my: 4, backgroundColor: 'rgba(255,255,255,0.2)' }} />
         
         <Typography variant="body2" align="center">
-          © {new Date().getFullYear()} Fresh Recipes. All rights reserved.
+          © {currentYear} Fresh Recipes. All rights reserved.
         </Typography>
       </Container>
     </Box>
   );
-};
+});
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -144,6 +319,39 @@ const Home: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
 
+  // Memoize event handlers to prevent unnecessary re-creations
+  const handleLogout = useCallback(() => {
+    dispatch(logout());
+    navigate('/login');
+  }, [dispatch, navigate]);
+
+  const handleGenerateRecipe = useCallback(() => {
+    dispatch(clearCurrentRecipe());
+    navigate('/generate');
+  }, [dispatch, navigate]);
+
+  const handleViewRecipe = useCallback((recipe: Recipe) => {
+    if (recipe) {
+      dispatch(setCurrentRecipe(recipe));
+      navigate('/recipe');
+    }
+  }, [dispatch, navigate]);
+
+  const handleViewAllRecipes = useCallback(() => {
+    navigate('/saved-recipes');
+  }, [navigate]);
+
+  const handleOpenDeleteModal = useCallback((recipe: Recipe) => {
+    setRecipeToDelete(recipe);
+    setDeleteModalOpen(true);
+  }, []);
+
+  const handleCloseDeleteModal = useCallback(() => {
+    setDeleteModalOpen(false);
+    setRecipeToDelete(null);
+  }, []);
+
+  // Fetch recipes only when needed
   useEffect(() => {
     // Fetch recipes when component mounts and user is logged in
     if (user) {
@@ -151,42 +359,21 @@ const Home: React.FC = () => {
     }
   }, [user, dispatch]);
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
-  };
+  // Memoize derived data to prevent recalculations on every render
+  const recentRecipes = useMemo(() => {
+    if (!recipes.length) return [];
+    
+    return [...recipes]
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      })
+      .slice(0, 3);
+  }, [recipes]);
 
-  const handleGenerateRecipe = () => {
-    navigate('/generate');
-  };
-
-  const handleViewRecipe = (recipe: Recipe) => {
-    if (recipe) {
-      dispatch(setCurrentRecipe(recipe));
-      navigate('/recipe');
-    }
-  };
-
-  const handleViewAllRecipes = () => {
-    navigate('/saved-recipes');
-  };
-
-  const handleOpenDeleteModal = (recipe: Recipe) => {
-    setRecipeToDelete(recipe);
-    setDeleteModalOpen(true);
-  };
-
-  const handleCloseDeleteModal = () => {
-    setDeleteModalOpen(false);
-    setRecipeToDelete(null);
-  };
-
-  // Get the 3 most recent recipes
-  const recentRecipes = [...recipes].sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return dateB - dateA;
-  }).slice(0, 3);
+  // Only show view all button when there are more than 3 recipes
+  const shouldShowViewAllButton = useMemo(() => recipes.length > 3, [recipes.length]);
 
   return (
     <Box>
@@ -235,6 +422,7 @@ const Home: React.FC = () => {
                 <Grid item xs={12} md={4} sx={{ display: { xs: 'none', md: 'block' } }}>
                   <Box
                     component="img"
+                    loading="lazy" // Add lazy loading to improve initial page load
                     src="https://images.unsplash.com/photo-1498837167922-ddd27525d352?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2340&q=80"
                     alt="Fresh food"
                     sx={{
@@ -256,33 +444,7 @@ const Home: React.FC = () => {
               <Grid container spacing={3}>
                 {keyFeatures.map((feature, index) => (
                   <Grid item xs={12} sm={6} md={3} key={index}>
-                    <Paper
-                      elevation={2}
-                      sx={{
-                        p: 3,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        textAlign: 'center',
-                        borderRadius: 2,
-                        transition: 'transform 0.2s',
-                        '&:hover': {
-                          transform: 'translateY(-5px)',
-                          boxShadow: 3,
-                        }
-                      }}
-                    >
-                      <Box sx={{ color: 'primary.main', mb: 2 }}>
-                        {feature.icon}
-                      </Box>
-                      <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        {feature.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {feature.description}
-                      </Typography>
-                    </Paper>
+                    <KeyFeatureCard feature={feature} />
                   </Grid>
                 ))}
               </Grid>
@@ -294,7 +456,7 @@ const Home: React.FC = () => {
                 <Typography variant="h5" fontWeight="bold" color="primary.dark">
                   Your Recent Recipes
                 </Typography>
-                {recipes.length > 3 && (
+                {shouldShowViewAllButton && (
                   <Button 
                     variant="text" 
                     color="primary"
@@ -334,106 +496,12 @@ const Home: React.FC = () => {
               ) : (
                 <Grid container spacing={3}>
                   {recentRecipes.map((recipe) => (
-                    <Grid item xs={12} sm={6} md={4} key={recipe.id || `recipe-${Math.random()}`}>
-                      <Card 
-                        elevation={2}
-                        sx={{ 
-                          height: '100%', 
-                          display: 'flex', 
-                          flexDirection: 'column',
-                          transition: 'transform 0.2s, box-shadow 0.2s',
-                          '&:hover': {
-                            transform: 'translateY(-4px)',
-                            boxShadow: 6,
-                          },
-                        }}
-                      >
-                        {recipe.imageUrl && (
-                          <Box
-                            component="img"
-                            src={recipe.imageUrl}
-                            alt={recipe.title}
-                            sx={{
-                              width: '100%',
-                              height: '160px',
-                              objectFit: 'cover',
-                            }}
-                          />
-                        )}
-                        <CardContent sx={{ flexGrow: 1 }}>
-                          <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.dark" noWrap>
-                            {recipe.title}
-                          </Typography>
-                          
-                          <Typography 
-                            variant="body2" 
-                            color="text.secondary" 
-                            sx={{ 
-                              mb: 2,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              height: '40px'
-                            }}
-                          >
-                            {recipe.description}
-                          </Typography>
-                          
-                          <Divider sx={{ my: 1.5 }} />
-                          
-                          <Grid container spacing={1}>
-                            <Grid item xs={4}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
-                                <AccessTimeIcon color="primary" fontSize="small" />
-                                <Typography variant="caption" align="center">
-                                  {Number(recipe.prepTime) + Number(recipe.cookTime)} min
-                                </Typography>
-                              </Box>
-                            </Grid>
-                            
-                            <Grid item xs={4}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
-                                <RestaurantIcon color="primary" fontSize="small" />
-                                <Typography variant="caption" align="center">
-                                  {recipe.servings} serv
-                                </Typography>
-                              </Box>
-                            </Grid>
-                            
-                            <Grid item xs={4}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column' }}>
-                                <LocalDiningIcon color="primary" fontSize="small" />
-                                <Typography variant="caption" align="center">
-                                  {recipe.nutrition.calories} kcal
-                                </Typography>
-                              </Box>
-                            </Grid>
-                          </Grid>
-                        </CardContent>
-                        
-                        <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
-                          <Button 
-                            size="small" 
-                            variant="outlined"
-                            onClick={() => handleViewRecipe(recipe)}
-                          >
-                            View Recipe
-                          </Button>
-                          
-                          <Tooltip title="Delete Recipe">
-                            <IconButton 
-                              size="small"
-                              color="error"
-                              onClick={() => handleOpenDeleteModal(recipe)}
-                              disabled={!(recipe.id || recipe._id)}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </CardActions>
-                      </Card>
+                    <Grid item xs={12} sm={6} md={4} key={recipe.id || recipe._id || `recipe-${Math.random()}`}>
+                      <RecipeCard 
+                        recipe={recipe} 
+                        onView={handleViewRecipe} 
+                        onDelete={handleOpenDeleteModal}
+                      />
                     </Grid>
                   ))}
                 </Grid>
@@ -496,6 +564,7 @@ const Home: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <Box
                     component="img"
+                    loading="lazy" // Add lazy loading for images
                     src="https://images.unsplash.com/photo-1505935428862-770b6f24f629?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2340&q=80"
                     alt="Fresh food"
                     sx={{
@@ -531,33 +600,7 @@ const Home: React.FC = () => {
               <Grid container spacing={4}>
                 {keyFeatures.map((feature, index) => (
                   <Grid item xs={12} sm={6} md={3} key={index}>
-                    <Paper
-                      elevation={3}
-                      sx={{
-                        p: 3,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        textAlign: 'center',
-                        borderRadius: 4,
-                        transition: 'transform 0.3s, box-shadow 0.3s',
-                        '&:hover': {
-                          transform: 'translateY(-8px)',
-                          boxShadow: 6,
-                        }
-                      }}
-                    >
-                      <Box sx={{ color: 'primary.main', mb: 2 }}>
-                        {feature.icon}
-                      </Box>
-                      <Typography variant="h6" fontWeight="bold" gutterBottom>
-                        {feature.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {feature.description}
-                      </Typography>
-                    </Paper>
+                    <KeyFeatureCard feature={feature} elevation={3} hoverTransform={-8} />
                   </Grid>
                 ))}
               </Grid>
@@ -599,12 +642,16 @@ const Home: React.FC = () => {
           </Box>
         )}
 
-        {/* Delete Recipe Modal */}
-        <DeleteRecipeModal
-          open={deleteModalOpen}
-          recipe={recipeToDelete}
-          onClose={handleCloseDeleteModal}
-        />
+        {/* Delete Recipe Modal - Lazy loaded */}
+        <Suspense fallback={<CircularProgress />}>
+          {deleteModalOpen && (
+            <DeleteRecipeModal
+              open={deleteModalOpen}
+              recipe={recipeToDelete}
+              onClose={handleCloseDeleteModal}
+            />
+          )}
+        </Suspense>
       </Container>
       
       {/* Footer */}
@@ -613,4 +660,5 @@ const Home: React.FC = () => {
   );
 };
 
-export default Home; 
+// Export as memoized component to prevent unnecessary re-renders
+export default React.memo(Home); 

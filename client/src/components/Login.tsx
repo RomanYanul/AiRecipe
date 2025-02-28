@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -18,6 +18,50 @@ import LockIcon from '@mui/icons-material/Lock';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { login, reset } from '../features/auth/authSlice';
 
+// Memoized form field component for better performance
+const FormField = React.memo(({ 
+  id, 
+  label, 
+  name, 
+  type = 'text', 
+  value, 
+  onChange, 
+  error, 
+  helperText, 
+  icon,
+  autoComplete
+}: {
+  id: string;
+  label: string;
+  name: string;
+  type?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  error: boolean;
+  helperText: string;
+  icon: React.ReactNode;
+  autoComplete?: string;
+}) => (
+  <TextField
+    margin="normal"
+    required
+    fullWidth
+    id={id}
+    label={label}
+    name={name}
+    type={type}
+    autoComplete={autoComplete}
+    value={value}
+    onChange={onChange}
+    error={error}
+    helperText={helperText}
+    InputProps={{
+      startAdornment: icon,
+    }}
+    sx={{ mb: 2 }}
+  />
+));
+
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
@@ -36,17 +80,13 @@ const Login: React.FC = () => {
     (state) => state.auth
   );
 
-  useEffect(() => {
-    if (isSuccess || user) {
-      navigate('/');
-    }
+  // Optimize navigation with useCallback
+  const navigateToRegister = useCallback(() => {
+    navigate('/register');
+  }, [navigate]);
 
-    return () => {
-      dispatch(reset());
-    };
-  }, [user, isSuccess, navigate, dispatch]);
-
-  const validateForm = (): boolean => {
+  // Memoize form validation to prevent unnecessary recalculations
+  const validateForm = useCallback((): boolean => {
     let valid = true;
     const errors = {
       email: '',
@@ -68,27 +108,109 @@ const Login: React.FC = () => {
 
     setFormErrors(errors);
     return valid;
-  };
+  }, [email, password]);
 
-  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prevState) => ({
+  // Optimize form field handling
+  const onChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prevState => ({
       ...prevState,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
-  };
+  }, []);
 
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  // Optimize form submission
+  const onSubmit = useCallback((e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (validateForm()) {
-      const userData = {
-        email,
-        password,
-      };
-
-      dispatch(login(userData));
+      dispatch(login({ email, password }));
     }
-  };
+  }, [dispatch, email, password, validateForm]);
+
+  // Cleanup effect
+  useEffect(() => {
+    // Only navigate if user actually changed
+    if (isSuccess || user) {
+      navigate('/');
+    }
+
+    return () => {
+      dispatch(reset());
+    };
+  }, [user, isSuccess, navigate, dispatch]);
+
+  // Logo section is memoized to prevent re-renders
+  const LogoSection = useMemo(() => (
+    <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', mb: 3 }}>
+      <RestaurantMenuIcon sx={{ color: 'primary.main', fontSize: 40, mr: 1 }} />
+      <Typography variant="h4" fontWeight="bold" color="primary.main">
+        Fresh Recipes
+      </Typography>
+    </Box>
+  ), []);
+
+  // Memoize the side panel to prevent re-renders
+  const SidePanel = useMemo(() => (
+    <Grid 
+      item 
+      xs={12} 
+      md={5} 
+      sx={{ 
+        display: { xs: 'none', md: 'block' },
+        position: 'relative',
+        overflow: 'hidden',
+        minHeight: 400,
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundImage: 'url(https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(76, 175, 80, 0.7)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          color: 'white',
+          padding: 4,
+        }}
+      >
+        <RestaurantMenuIcon sx={{ fontSize: 60, mb: 2 }} />
+        <Typography variant="h4" fontWeight="bold" align="center" gutterBottom>
+          Fresh Recipes
+        </Typography>
+        <Typography variant="body1" align="center">
+          Sign in to discover delicious recipes tailored just for you
+        </Typography>
+      </Box>
+    </Grid>
+  ), []);
+
+  // Email icon component is memoized
+  const emailIcon = useMemo(() => 
+    <EmailIcon color="primary" sx={{ mr: 1, opacity: 0.7 }} />, 
+  []);
+
+  // Password icon component is memoized
+  const passwordIcon = useMemo(() => 
+    <LockIcon color="primary" sx={{ mr: 1, opacity: 0.7 }} />, 
+  []);
 
   return (
     <Container component="main" maxWidth="sm" sx={{ py: 8 }}>
@@ -101,54 +223,7 @@ const Login: React.FC = () => {
         }}
       >
         <Grid container>
-          <Grid 
-            item 
-            xs={12} 
-            md={5} 
-            sx={{ 
-              display: { xs: 'none', md: 'block' },
-              position: 'relative',
-              overflow: 'hidden',
-              minHeight: 400,
-            }}
-          >
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                backgroundImage: 'url(https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=687&q=80)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            />
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                backgroundColor: 'rgba(76, 175, 80, 0.7)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                color: 'white',
-                padding: 4,
-              }}
-            >
-              <RestaurantMenuIcon sx={{ fontSize: 60, mb: 2 }} />
-              <Typography variant="h4" fontWeight="bold" align="center" gutterBottom>
-                Fresh Recipes
-              </Typography>
-              <Typography variant="body1" align="center">
-                Sign in to discover delicious recipes tailored just for you
-              </Typography>
-            </Box>
-          </Grid>
+          {SidePanel}
           
           <Grid item xs={12} md={7}>
             <Box
@@ -159,12 +234,7 @@ const Login: React.FC = () => {
                 height: '100%',
               }}
             >
-              <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', mb: 3 }}>
-                <RestaurantMenuIcon sx={{ color: 'primary.main', fontSize: 40, mr: 1 }} />
-                <Typography variant="h4" fontWeight="bold" color="primary.main">
-                  Fresh Recipes
-                </Typography>
-              </Box>
+              {LogoSection}
               
               <Typography component="h1" variant="h5" fontWeight="bold" gutterBottom>
                 Welcome Back
@@ -180,41 +250,31 @@ const Login: React.FC = () => {
               )}
 
               <Box component="form" onSubmit={onSubmit} sx={{ mt: 1 }}>
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
+                <FormField
                   id="email"
                   label="Email Address"
                   name="email"
-                  autoComplete="email"
                   value={email}
                   onChange={onChange}
                   error={!!formErrors.email}
                   helperText={formErrors.email}
-                  InputProps={{
-                    startAdornment: <EmailIcon color="primary" sx={{ mr: 1, opacity: 0.7 }} />,
-                  }}
-                  sx={{ mb: 2 }}
+                  icon={emailIcon}
+                  autoComplete="email"
                 />
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  name="password"
-                  label="Password"
-                  type="password"
+                
+                <FormField
                   id="password"
-                  autoComplete="current-password"
+                  label="Password"
+                  name="password"
+                  type="password"
                   value={password}
                   onChange={onChange}
                   error={!!formErrors.password}
                   helperText={formErrors.password}
-                  InputProps={{
-                    startAdornment: <LockIcon color="primary" sx={{ mr: 1, opacity: 0.7 }} />,
-                  }}
-                  sx={{ mb: 3 }}
+                  icon={passwordIcon}
+                  autoComplete="current-password"
                 />
+                
                 <Button
                   type="submit"
                   fullWidth
@@ -243,7 +303,7 @@ const Login: React.FC = () => {
                     Don't have an account?
                   </Typography>
                   <Button
-                    onClick={() => navigate('/register')}
+                    onClick={navigateToRegister}
                     variant="outlined"
                     fullWidth
                     sx={{ borderRadius: 2 }}
@@ -260,4 +320,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login; 
+export default React.memo(Login); 

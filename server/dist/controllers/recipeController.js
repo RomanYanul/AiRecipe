@@ -48,7 +48,7 @@ exports.getRecipe = getRecipe;
 const createRecipe = async (req, res) => {
     var _a;
     try {
-        const { title, description, ingredients, instructions, prepTime, cookTime, servings, nutrition } = req.body;
+        const { title, description, ingredients, instructions, prepTime, cookTime, servings, nutrition, imageUrl } = req.body;
         // Create recipe
         const recipe = await Recipe_1.default.create({
             user: (_a = req.user) === null || _a === void 0 ? void 0 : _a.id,
@@ -59,7 +59,8 @@ const createRecipe = async (req, res) => {
             prepTime: Number(prepTime),
             cookTime: Number(cookTime),
             servings: Number(servings),
-            nutrition
+            nutrition,
+            imageUrl
         });
         res.status(201).json(recipe);
     }

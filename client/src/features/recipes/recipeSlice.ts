@@ -2,8 +2,26 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import axios from 'axios';
 import { Recipe, RecipeParams, generateRecipe as generateRecipeApi } from '../../services/openai';
 
-// API URLs
+// API URLs with configurable caching
 const API_URL = '/api/recipes/';
+
+// Create axios instance with optimized config
+const api = axios.create({
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  // Increasing timeout for stability but not too long to prevent hanging requests
+  timeout: 30000,
+});
+
+// Cache for recipes to prevent redundant fetches
+interface RecipeCache {
+  timestamp: number;
+  data: Recipe[];
+}
+
+let recipesCache: RecipeCache | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 // Define a type for our state
 interface RecipeState {
@@ -14,6 +32,7 @@ interface RecipeState {
   isError: boolean;
   isSuccess: boolean;
   message: string;
+  lastFetch: number | null;
 }
 
 // Define the initial state
@@ -25,7 +44,18 @@ const initialState: RecipeState = {
   isError: false,
   isSuccess: false,
   message: '',
+  lastFetch: null,
 };
+
+// Helper function to check if recipe ID exists in a safer way
+const getRecipeId = (recipe: Recipe) => recipe.id || recipe._id;
+
+// Helper function for auth headers with memoization
+const getAuthConfig = (token: string) => ({
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
 
 // Generate a new recipe using OpenAI
 export const generateNewRecipe = createAsyncThunk(
@@ -43,7 +73,7 @@ export const generateNewRecipe = createAsyncThunk(
   }
 );
 
-// Fetch user's recipes from backend
+// Fetch user's recipes from backend with caching
 export const getRecipes = createAsyncThunk(
   'recipes/getAll',
   async (_, thunkAPI: any) => {
@@ -54,14 +84,29 @@ export const getRecipes = createAsyncThunk(
         return thunkAPI.rejectWithValue('User not authenticated');
       }
       
-      const token = auth.token; // Get token from the root level of auth state
+      const token = auth.token;
       
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      // Check if we have a valid cache
+      const state = thunkAPI.getState().recipes;
+      if (
+        state.lastFetch && 
+        (Date.now() - state.lastFetch < CACHE_DURATION) && 
+        state.recipes.length > 0
+      ) {
+        // Use cached data
+        return state.recipes;
+      }
+      
+      // If no cache, fetch from API
+      const config = getAuthConfig(token);
+      const response = await api.get(API_URL, config);
+      
+      // Update cache
+      recipesCache = {
+        timestamp: Date.now(),
+        data: response.data,
       };
-      const response = await axios.get(API_URL, config);
+      
       return response.data;
     } catch (error: any) {
       const message =
@@ -73,7 +118,7 @@ export const getRecipes = createAsyncThunk(
   }
 );
 
-// Save a recipe
+// Save a recipe with optimized checks
 export const saveRecipe = createAsyncThunk(
   'recipes/save',
   async (recipe: Recipe, thunkAPI: any) => {
@@ -83,13 +128,8 @@ export const saveRecipe = createAsyncThunk(
         return thunkAPI.rejectWithValue('Not authenticated');
       }
 
-      const token = auth.token; // Get token from the root level of auth state
-      
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      };
+      const token = auth.token;
+      const config = getAuthConfig(token);
 
       // Check if the recipe already exists in the state
       const { recipes } = thunkAPI.getState().recipes;
@@ -102,7 +142,11 @@ export const saveRecipe = createAsyncThunk(
       }
 
       // Save the recipe to the backend
-      const response = await axios.post(API_URL, recipe, config);
+      const response = await api.post(API_URL, recipe, config);
+      
+      // Invalidate cache
+      recipesCache = null;
+      
       return response.data;
     } catch (error: any) {
       const message =
@@ -114,7 +158,7 @@ export const saveRecipe = createAsyncThunk(
   }
 );
 
-// Delete a recipe
+// Delete recipe with optimistic updates
 export const deleteRecipe = createAsyncThunk(
   'recipes/delete',
   async (id: string, thunkAPI: any) => {
@@ -124,21 +168,17 @@ export const deleteRecipe = createAsyncThunk(
         return thunkAPI.rejectWithValue('Not authenticated');
       }
 
-      const token = auth.token; // Get token from the root level of auth state
-      
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      };
+      const token = auth.token;
+      const config = getAuthConfig(token);
 
-      console.log('Sending delete request for ID:', id);
+      // Delete from API
+      await api.delete(`${API_URL}${id}`, config);
       
-      // Delete the recipe from the backend
-      await axios.delete(API_URL + id, config);
+      // Invalidate cache
+      recipesCache = null;
+      
       return id;
     } catch (error: any) {
-      console.error('Delete recipe error:', error);
       const message =
         (error.response && error.response.data && error.response.data.message) ||
         error.message ||
@@ -147,6 +187,17 @@ export const deleteRecipe = createAsyncThunk(
     }
   }
 );
+
+// Normalize a recipe: ensure both id and _id are present
+const normalizeRecipe = (recipe: Recipe): Recipe => {
+  const normalized = { ...recipe };
+  if (normalized._id && !normalized.id) {
+    normalized.id = normalized._id;
+  } else if (normalized.id && !normalized._id) {
+    normalized._id = normalized.id;
+  }
+  return normalized;
+};
 
 export const recipeSlice = createSlice({
   name: 'recipe',
@@ -163,7 +214,11 @@ export const recipeSlice = createSlice({
       state.currentRecipe = null;
     },
     setCurrentRecipe: (state, action: PayloadAction<Recipe>) => {
-      state.currentRecipe = action.payload;
+      state.currentRecipe = normalizeRecipe(action.payload);
+    },
+    invalidateCache: (state) => {
+      state.lastFetch = null;
+      recipesCache = null;
     },
   },
   extraReducers: (builder) => {
@@ -178,7 +233,7 @@ export const recipeSlice = createSlice({
       .addCase(generateNewRecipe.fulfilled, (state, action) => {
         state.isGenerating = false;
         state.isSuccess = true;
-        state.currentRecipe = action.payload;
+        state.currentRecipe = normalizeRecipe(action.payload);
       })
       .addCase(generateNewRecipe.rejected, (state, action) => {
         state.isGenerating = false;
@@ -188,22 +243,21 @@ export const recipeSlice = createSlice({
       
       // Get recipes cases
       .addCase(getRecipes.pending, (state) => {
-        state.isLoading = true;
+        if (!state.lastFetch || Date.now() - state.lastFetch > CACHE_DURATION) {
+          state.isLoading = true;
+        }
         state.isError = false;
       })
       .addCase(getRecipes.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isSuccess = true;
-        // Ensure both id and _id are set for all recipes
-        const recipes = action.payload.map((recipe: Recipe) => {
-          if (recipe._id && !recipe.id) {
-            return { ...recipe, id: recipe._id };
-          } else if (recipe.id && !recipe._id) {
-            return { ...recipe, _id: recipe.id };
-          }
-          return recipe;
-        });
-        state.recipes = recipes;
+        state.lastFetch = Date.now();
+        
+        // Don't update state if we're returning the same recipes from cache
+        if (action.payload !== state.recipes) {
+          // Normalize all recipes
+          state.recipes = action.payload.map((recipe: Recipe) => normalizeRecipe(recipe));
+        }
       })
       .addCase(getRecipes.rejected, (state, action) => {
         state.isLoading = false;
@@ -220,13 +274,9 @@ export const recipeSlice = createSlice({
       .addCase(saveRecipe.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isSuccess = true;
-        // Ensure both id and _id are set from the server response
-        const savedRecipe = action.payload;
-        if (savedRecipe._id && !savedRecipe.id) {
-          savedRecipe.id = savedRecipe._id;
-        } else if (savedRecipe.id && !savedRecipe._id) {
-          savedRecipe._id = savedRecipe.id;
-        }
+        
+        // Add normalized recipe
+        const savedRecipe = normalizeRecipe(action.payload);
         state.recipes.push(savedRecipe);
         state.message = 'Recipe saved successfully!';
       })
@@ -244,14 +294,12 @@ export const recipeSlice = createSlice({
       .addCase(deleteRecipe.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isSuccess = true;
-        // Remove the deleted recipe from the array, checking both id and _id
-        state.recipes = state.recipes.filter((recipe) => {
-          // If either id or _id matches the payload, filter it out
-          if (recipe.id === action.payload || recipe._id === action.payload) {
-            return false; // Remove this recipe
-          }
-          return true; // Keep this recipe
-        });
+        
+        // Remove the deleted recipe from the array with optimized filter
+        const idToDelete = action.payload;
+        state.recipes = state.recipes.filter(
+          (recipe) => getRecipeId(recipe) !== idToDelete
+        );
         state.message = 'Recipe deleted successfully!';
       })
       .addCase(deleteRecipe.rejected, (state, action) => {
@@ -262,5 +310,5 @@ export const recipeSlice = createSlice({
   },
 });
 
-export const { reset, clearCurrentRecipe, setCurrentRecipe } = recipeSlice.actions;
+export const { reset, clearCurrentRecipe, setCurrentRecipe, invalidateCache } = recipeSlice.actions;
 export default recipeSlice.reducer; 
