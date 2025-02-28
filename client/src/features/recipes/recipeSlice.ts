@@ -173,6 +173,7 @@ export const recipeSlice = createSlice({
         state.isGenerating = true;
         state.isError = false;
         state.isSuccess = false;
+        state.message = '';
       })
       .addCase(generateNewRecipe.fulfilled, (state, action) => {
         state.isGenerating = false;

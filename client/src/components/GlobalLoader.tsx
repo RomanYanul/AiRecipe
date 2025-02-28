@@ -20,8 +20,8 @@ const GlobalLoader: React.FC = () => {
     // Set up event listener for storage changes
     window.addEventListener('storage', checkSubmittingState);
     
-    // Also poll regularly to be extra safe
-    const interval = setInterval(checkSubmittingState, 100);
+    // Poll regularly to ensure we catch all state changes
+    const interval = setInterval(checkSubmittingState, 300);
     
     // Clean up
     return () => {
@@ -30,19 +30,13 @@ const GlobalLoader: React.FC = () => {
     };
   }, []);
   
-  // Force the component to re-render every 100ms to check localStorage
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setIsSubmitting(localStorage.getItem('recipe_submitting') === 'true');
-    }, 100);
-    
-    return () => clearInterval(interval);
-  }, []);
-  
   // Show loader when either generating a recipe, loading data, or form is being submitted
   const isOpen = isGenerating || isLoading || isSubmitting;
   
-  console.log('GlobalLoader state:', { isGenerating, isLoading, isSubmitting, isOpen });
+  // For debugging
+  useEffect(() => {
+    console.log('GlobalLoader state:', { isGenerating, isLoading, isSubmitting, isOpen });
+  }, [isGenerating, isLoading, isSubmitting, isOpen]);
 
   return (
     <Backdrop

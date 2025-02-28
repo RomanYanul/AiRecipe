@@ -142,18 +142,21 @@ const GenerateRecipe: React.FC = () => {
         mainIngredients: mainIngredients.split(',').map(item => item.trim()),
       };
 
-      // Short delay to ensure UI updates before API call
-      setTimeout(() => {
-        dispatch(generateNewRecipe(recipeParams));
-      }, 100);
+      // Dispatch the action to generate a recipe
+      dispatch(generateNewRecipe(recipeParams));
     }
   };
 
   // Clear localStorage submission state when component unmounts or on success/error
   useEffect(() => {
-    // Clear on success or error
+    // Clear on success or error, but with a slight delay to ensure the UI transition is smooth
     if (isSuccess || isError) {
-      localStorage.removeItem('recipe_submitting');
+      const timer = setTimeout(() => {
+        localStorage.removeItem('recipe_submitting');
+        setIsSubmitting(false);
+      }, 1000); // 1 second delay before removing the loading state
+      
+      return () => clearTimeout(timer);
     }
     
     // Clear on unmount
