@@ -58,6 +58,10 @@ const RecipeSchema = new mongoose.Schema({
   nutrition: {
     type: NutritionSchema,
     required: true
+  },
+  imageUrl: {
+    type: String,
+    required: false
   }
 }, {
   timestamps: true

@@ -30,7 +30,6 @@ import { RecipeParams } from '../services/openai';
 
 // Diet options
 const dietOptions = [
-  'No Preference',
   'Vegetarian',
   'Vegan',
   'Pescatarian',
@@ -40,6 +39,8 @@ const dietOptions = [
   'Low-Fat',
   'Mediterranean',
   'Gluten-Free',
+  'Diabetic-Friendly',
+  'Low-Cholesterol',
 ];
 
 // Common allergies
@@ -65,9 +66,10 @@ const GenerateRecipe: React.FC = () => {
   );
 
   // Form state
-  const [diet, setDiet] = useState<string>('No Preference');
+  const [diet, setDiet] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [calories, setCalories] = useState<number>(500);
+  const [servings, setServings] = useState<number>(4);
   const [mainIngredients, setMainIngredients] = useState<string>('');
   const [formErrors, setFormErrors] = useState({
     mainIngredients: '',
@@ -99,6 +101,10 @@ const GenerateRecipe: React.FC = () => {
 
   const handleAllergiesChange = (event: SelectChangeEvent<string[]>) => {
     setAllergies(event.target.value as string[]);
+  };
+
+  const handleDietChange = (event: SelectChangeEvent<string[]>) => {
+    setDiet(event.target.value as string[]);
   };
 
   const handleCaloriesChange = (event: Event, newValue: number | number[]) => {
@@ -136,10 +142,11 @@ const GenerateRecipe: React.FC = () => {
       console.log('Form submitted, setting recipe_submitting to true');
       
       const recipeParams: RecipeParams = {
-        diet: diet !== 'No Preference' ? diet : undefined,
+        diet: diet.length > 0 ? diet : undefined,
         allergies: allergies.length > 0 ? allergies : undefined,
         calories,
         mainIngredients: mainIngredients.split(',').map(item => item.trim()),
+        servings,
       };
 
       // Dispatch the action to generate a recipe
@@ -198,16 +205,26 @@ const GenerateRecipe: React.FC = () => {
                 <Select
                   labelId="diet-label"
                   id="diet"
+                  multiple
                   value={diet}
-                  label="Diet Preference"
-                  onChange={(e) => setDiet(e.target.value)}
+                  onChange={handleDietChange}
+                  input={<OutlinedInput label="Diet Preference" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selected as string[]).map((value) => (
+                        <Chip key={value} label={value} size="small" />
+                      ))}
+                    </Box>
+                  )}
                 >
                   {dietOptions.map((option) => (
                     <MenuItem key={option} value={option}>
-                      {option}
+                      <Checkbox checked={diet.indexOf(option) > -1} />
+                      <ListItemText primary={option} />
                     </MenuItem>
                   ))}
                 </Select>
+                <FormHelperText>Select one or more diet preferences (optional)</FormHelperText>
               </FormControl>
             </Grid>
 
@@ -236,6 +253,7 @@ const GenerateRecipe: React.FC = () => {
                     </MenuItem>
                   ))}
                 </Select>
+                <FormHelperText>Select any allergies or ingredients to avoid (optional)</FormHelperText>
               </FormControl>
             </Grid>
 
@@ -252,6 +270,23 @@ const GenerateRecipe: React.FC = () => {
                 marks
                 min={200}
                 max={1000}
+                sx={{ color: 'primary.main' }}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography id="servings-slider" gutterBottom>
+                Number of servings: {servings}
+              </Typography>
+              <Slider
+                value={servings}
+                onChange={(event, newValue) => setServings(newValue as number)}
+                aria-labelledby="servings-slider"
+                valueLabelDisplay="auto"
+                step={1}
+                marks
+                min={1}
+                max={12}
                 sx={{ color: 'primary.main' }}
               />
             </Grid>

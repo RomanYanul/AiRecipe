@@ -51,7 +51,8 @@ export const createRecipe = async (req: AuthRequest, res: Response) => {
       prepTime,
       cookTime,
       servings,
-      nutrition
+      nutrition,
+      imageUrl
     } = req.body;
 
     // Create recipe
@@ -64,7 +65,8 @@ export const createRecipe = async (req: AuthRequest, res: Response) => {
       prepTime: Number(prepTime),
       cookTime: Number(cookTime),
       servings: Number(servings),
-      nutrition
+      nutrition,
+      imageUrl
     });
 
     res.status(201).json(recipe);

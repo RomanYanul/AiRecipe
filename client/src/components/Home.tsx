@@ -22,7 +22,7 @@ import LocalDiningIcon from '@mui/icons-material/LocalDining';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useAppSelector, useAppDispatch } from '../app/hooks';
 import { logout } from '../features/auth/authSlice';
-import { getRecipes, setCurrentRecipe, deleteRecipe, clearCurrentRecipe } from '../features/recipes/recipeSlice';
+import { getRecipes, setCurrentRecipe, deleteRecipe } from '../features/recipes/recipeSlice';
 import { Recipe } from '../services/openai';
 import DeleteRecipeModal from './DeleteRecipeModal';
 
@@ -31,6 +31,8 @@ const Home: React.FC = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
   const { recipes, isLoading } = useAppSelector((state) => state.recipes);
+
+  // State for delete modal
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
 
@@ -47,8 +49,6 @@ const Home: React.FC = () => {
   };
 
   const handleGenerateRecipe = () => {
-    // Clear the current recipe before navigating to generate page
-    dispatch(clearCurrentRecipe());
     navigate('/generate');
   };
 
@@ -59,7 +59,11 @@ const Home: React.FC = () => {
     }
   };
 
-  const handleDeleteRecipe = (recipe: Recipe) => {
+  const handleViewAllRecipes = () => {
+    navigate('/saved-recipes');
+  };
+
+  const handleOpenDeleteModal = (recipe: Recipe) => {
     setRecipeToDelete(recipe);
     setDeleteModalOpen(true);
   };
@@ -67,10 +71,6 @@ const Home: React.FC = () => {
   const handleCloseDeleteModal = () => {
     setDeleteModalOpen(false);
     setRecipeToDelete(null);
-  };
-
-  const handleViewAllRecipes = () => {
-    navigate('/saved-recipes');
   };
 
   // Get the 3 most recent recipes
@@ -199,6 +199,18 @@ const Home: React.FC = () => {
                         },
                       }}
                     >
+                      {recipe.imageUrl && (
+                        <Box
+                          component="img"
+                          src={recipe.imageUrl}
+                          alt={recipe.title}
+                          sx={{
+                            width: '100%',
+                            height: '160px',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      )}
                       <CardContent sx={{ flexGrow: 1 }}>
                         <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.dark" noWrap>
                           {recipe.title}
@@ -257,8 +269,6 @@ const Home: React.FC = () => {
                           size="small" 
                           variant="outlined"
                           onClick={() => handleViewRecipe(recipe)}
-                          fullWidth
-                          sx={{ mr: 1 }}
                         >
                           View Recipe
                         </Button>
@@ -267,7 +277,8 @@ const Home: React.FC = () => {
                           <IconButton 
                             size="small"
                             color="error"
-                            onClick={() => handleDeleteRecipe(recipe)}
+                            onClick={() => handleOpenDeleteModal(recipe)}
+                            disabled={!(recipe.id || recipe._id)}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -348,6 +359,7 @@ const Home: React.FC = () => {
         </Paper>
       )}
 
+      {/* Delete Recipe Modal */}
       <DeleteRecipeModal
         open={deleteModalOpen}
         recipe={recipeToDelete}

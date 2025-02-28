@@ -194,7 +194,16 @@ export const recipeSlice = createSlice({
       .addCase(getRecipes.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isSuccess = true;
-        state.recipes = action.payload;
+        // Ensure both id and _id are set for all recipes
+        const recipes = action.payload.map((recipe: Recipe) => {
+          if (recipe._id && !recipe.id) {
+            return { ...recipe, id: recipe._id };
+          } else if (recipe.id && !recipe._id) {
+            return { ...recipe, _id: recipe.id };
+          }
+          return recipe;
+        });
+        state.recipes = recipes;
       })
       .addCase(getRecipes.rejected, (state, action) => {
         state.isLoading = false;
@@ -211,7 +220,14 @@ export const recipeSlice = createSlice({
       .addCase(saveRecipe.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isSuccess = true;
-        state.recipes.push(action.payload);
+        // Ensure both id and _id are set from the server response
+        const savedRecipe = action.payload;
+        if (savedRecipe._id && !savedRecipe.id) {
+          savedRecipe.id = savedRecipe._id;
+        } else if (savedRecipe.id && !savedRecipe._id) {
+          savedRecipe._id = savedRecipe.id;
+        }
+        state.recipes.push(savedRecipe);
         state.message = 'Recipe saved successfully!';
       })
       .addCase(saveRecipe.rejected, (state, action) => {

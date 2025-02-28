@@ -120,6 +120,23 @@ const RecipeView: React.FC = () => {
           {currentRecipe.title}
         </Typography>
         
+        {currentRecipe.imageUrl && (
+          <Box sx={{ mb: 3, mt: 2, display: 'flex', justifyContent: 'center' }}>
+            <Box
+              component="img"
+              src={currentRecipe.imageUrl}
+              alt={currentRecipe.title}
+              sx={{
+                width: '100%',
+                maxWidth: '600px',
+                height: 'auto',
+                borderRadius: 2,
+                boxShadow: 3,
+              }}
+            />
+          </Box>
+        )}
+        
         <Typography variant="body1" paragraph>
           {currentRecipe.description}
         </Typography>

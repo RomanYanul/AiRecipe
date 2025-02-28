@@ -21,7 +21,7 @@ import RestaurantIcon from '@mui/icons-material/Restaurant';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalDiningIcon from '@mui/icons-material/LocalDining';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { deleteRecipe, getRecipes, setCurrentRecipe, clearCurrentRecipe } from '../features/recipes/recipeSlice';
+import { deleteRecipe, getRecipes, setCurrentRecipe } from '../features/recipes/recipeSlice';
 import { Recipe } from '../services/openai';
 import DeleteRecipeModal from './DeleteRecipeModal';
 
@@ -33,6 +33,8 @@ const SavedRecipes: React.FC = () => {
   const { recipes, isLoading, isError, message } = useAppSelector(
     (state) => state.recipes
   );
+
+  // State for delete modal
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<Recipe | null>(null);
 
@@ -53,7 +55,7 @@ const SavedRecipes: React.FC = () => {
     }
   };
 
-  const handleDeleteRecipe = (recipe: Recipe) => {
+  const handleOpenDeleteModal = (recipe: Recipe) => {
     setRecipeToDelete(recipe);
     setDeleteModalOpen(true);
   };
@@ -61,12 +63,6 @@ const SavedRecipes: React.FC = () => {
   const handleCloseDeleteModal = () => {
     setDeleteModalOpen(false);
     setRecipeToDelete(null);
-  };
-
-  const handleGenerateRecipe = () => {
-    // Clear the current recipe before navigating to generate page
-    dispatch(clearCurrentRecipe());
-    navigate('/generate');
   };
 
   if (isLoading) {
@@ -104,7 +100,7 @@ const SavedRecipes: React.FC = () => {
           <Button
             variant="contained"
             color="primary"
-            onClick={handleGenerateRecipe}
+            onClick={() => navigate('/generate')}
             sx={{ mt: 2 }}
           >
             Generate Your First Recipe
@@ -113,7 +109,7 @@ const SavedRecipes: React.FC = () => {
       ) : (
         <Grid container spacing={3}>
           {recipes.map((recipe) => (
-            <Grid item xs={12} sm={6} md={4} key={recipe.id || `recipe-${Math.random()}`}>
+            <Grid item xs={12} sm={6} md={4} key={recipe.id || recipe._id || `recipe-${Math.random()}`}>
               <Card 
                 elevation={2}
                 sx={{ 
@@ -127,6 +123,18 @@ const SavedRecipes: React.FC = () => {
                   },
                 }}
               >
+                {recipe.imageUrl && (
+                  <Box
+                    component="img"
+                    src={recipe.imageUrl}
+                    alt={recipe.title}
+                    sx={{
+                      width: '100%',
+                      height: '160px',
+                      objectFit: 'cover',
+                    }}
+                  />
+                )}
                 <CardContent sx={{ flexGrow: 1 }}>
                   <Typography variant="h6" fontWeight="bold" gutterBottom color="primary.dark" noWrap>
                     {recipe.title}
@@ -193,7 +201,8 @@ const SavedRecipes: React.FC = () => {
                     <IconButton 
                       size="small"
                       color="error"
-                      onClick={() => handleDeleteRecipe(recipe)}
+                      onClick={() => handleOpenDeleteModal(recipe)}
+                      disabled={!(recipe.id || recipe._id)}
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -205,6 +214,7 @@ const SavedRecipes: React.FC = () => {
         </Grid>
       )}
 
+      {/* Delete Recipe Modal */}
       <DeleteRecipeModal
         open={deleteModalOpen}
         recipe={recipeToDelete}
